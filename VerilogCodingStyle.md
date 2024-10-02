@@ -1187,7 +1187,7 @@ module simple (
   logic valid_d, valid_q, valid_q2, valid_q3;
   assign valid_d = valid_i; // next state assignment
 
-  always_ff @(posedge clk or negedge rst_ni) begin
+  always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       valid_q  <= '0;
       valid_q2 <= '0;
@@ -1932,9 +1932,9 @@ by Don Mills.
 
 Note that although don't cares can be used to indicate possible optimization
 opportunities to the synthesis tool, it is debatable whether the gains in logic
-reduction are significant enough to outweigh the possible synthesis mismatch
-issues that the use of `X` literals may entail (especially with the gate-counts
-available in today's technologies).
+reduction are significant enough to outweigh the possible simulation/synthesis
+mismatch issues that the use of `X` literals may entail (especially with the
+gate-counts available in today's technologies).
 
 
 #### Catching errors where invalid values are consumed
@@ -2152,8 +2152,8 @@ Synthesizable combinational logic blocks should only use blocking assignments.
 Do not use three-state logic (`Z` state) to accomplish on-chip logic such as
 muxing.
 
-Do not infer a latch inside a function, as this may cause a simulation /
-synthesis mismatch.
+Do not infer a latch inside a function, as this may cause a
+simulation/synthesis mismatch.
 
 ### Case Statements
 
@@ -2161,7 +2161,7 @@ synthesis mismatch.
 practice. Always define a default case.***
 
 Never use either the `full_case` or `parallel_case` pragmas. These pragmas can
-easily cause synthesis-simulation mismatches.
+easily cause simulation/synthesis mismatches.
 
 Here is an example of a style-compliant full case statement:
 
@@ -2194,7 +2194,7 @@ Be sure to use `unique case` correctly. In particular, make sure that:
   - if no default assignments are given before the case statement as shown in
   the example above, any variables assigned in one case item must be assigned in
   all case items, including the `default:`. Failing to do this can lead to a
-  simulation-synthesis mismatch as described in [Don Mills' paper][yalagp].
+  simulation/synthesis mismatch as described in [Don Mills' paper][yalagp].
 
 The following is a different example showing a style-compliant case statement
 variant that is frequently used for describing the next-state logic of a finite
@@ -2203,7 +2203,7 @@ assignments are put before the `unique case` block, thus making it possible to
 omit common assignments in the individual cases further below. If it weren't for
 the common default assignments before the case statement, all variables would
 have to be assigned a value in all cases and in the `default:` in order to
-prevent simulation-synthesis mismatches.
+prevent simulation/synthesis mismatches.
 
 ```systemverilog
 always_comb begin
@@ -2537,6 +2537,52 @@ function automatic logic [2:0] foo(logic [2:0] a, logic [2:0] b);
 
   return local_var_1 + local_var_2;
 endfunction
+```
+
+Functions should not reference any non-local signals or variables outside their
+scope. Avoiding non-local references improves readability and helps reduce
+simulation/synthesis mismatches. Accessing non-local parameters and constants
+is allowed.
+
+&#x1f44e;
+```systemverilog {.bad}
+// - Incorrect because `mem` is not local to get_mem()
+// - Incorrect because `in_i` is not local to get_mem()
+module mymod (
+  input   logic [7:0] in_i,
+  output  logic [7:0] out_o
+);
+
+logic [7:0] mem[256];
+
+function automatic logic [7:0] get_mem();
+  return mem[in_i];
+endfunction
+
+assign out_o = get_mem();
+
+endmodule
+```
+
+&#x1f44d;
+```systemverilog {.good}
+// - Correct because `MagicValue` is a parameter
+// - Correct because `my_pkg::OtherMagicValue` is a parameter
+// - Correct because `in_i` passed as an argument
+module mymod (
+  input   logic [7:0] in_i,
+  output  logic [7:0] out_o
+);
+
+localparam [7:0] MagicValue = 1;
+
+function automatic logic is_magic(logic [7:0] v);
+  return (v == MagicValue) || (v == my_pkg::OtherMagicValue);
+endfunction
+
+assign out_o = is_magic(in_i);
+
+endmodule
 ```
 
 ### Problematic Language Features and Constructs
